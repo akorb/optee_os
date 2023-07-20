@@ -18,6 +18,7 @@
 #define MBEDTLS_ASN1_WRITE_C
 #define MBEDTLS_RSA_C
 #define MBEDTLS_PKCS1_V21
+#define MBEDTLS_MD_C
 
 #ifdef ARM32
 #define MBEDTLS_HAVE_INT32
