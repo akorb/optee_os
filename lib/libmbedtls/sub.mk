@@ -83,6 +83,7 @@ SRCS_CRYPTO += ecdh.c
 SRCS_CRYPTO += ecdsa.c
 SRCS_CRYPTO += ecp.c
 SRCS_CRYPTO += ecp_curves.c
+SRCS_CRYPTO += error.c
 SRCS_CRYPTO += md.c
 SRCS_CRYPTO += md5.c
 SRCS_CRYPTO += oid.c

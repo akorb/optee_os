@@ -19,6 +19,12 @@
 #include <tee/uuid.h>
 #include <utee_defines.h>
 
+#include <mbedtls/x509_crt.h>
+#include <mbedtls/x509_csr.h>
+#include <mbedtls/oid.h>
+#include <mbedtls/md.h>
+#include <mbedtls/error.h>
+
 #define PTA_NAME "attestation.pta"
 
 #define MAX_KEY_SIZE 4096
@@ -71,6 +77,275 @@ static TEE_Result generate_key(void)
 		free_key();
 
 	return res;
+}
+
+static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
+{
+    int ret = 1;
+    int exit_code = MBEDTLS_EXIT_FAILURE;
+    mbedtls_pk_context loaded_issuer_key, loaded_subject_key;
+    mbedtls_pk_context *issuer_key = &loaded_issuer_key,
+                       *subject_key = &loaded_subject_key;
+    char buf[1024];
+    mbedtls_x509write_cert crt;
+    mbedtls_mpi serial;
+	uint8_t output_buf[MAX_CERT_SIZE];
+
+	uint8_t attestation_extension_value[sizeof(attestation_extension_value_preface) + TCI_LEN];
+
+    /*
+     * Set to sane values
+     */
+    mbedtls_x509write_crt_init(&crt);
+    mbedtls_pk_init(&loaded_issuer_key);
+    mbedtls_pk_init(&loaded_subject_key);
+    mbedtls_mpi_init(&serial);
+    memset(buf, 0, 1024);
+
+    IMSG("");
+
+    // Parse serial to MPI
+    //
+    IMSG("  . Reading serial number...");
+
+    if ((ret = mbedtls_mpi_read_string(&serial, 10, ci.serial)) != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_mpi_read_string "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    IMSG(" ok\n");
+
+    /*
+     * 1.1. Load the keys
+     */
+    if (!ci.selfsign)
+    {
+        IMSG("  . Loading the subject key ...");
+
+        ret = mbedtls_pk_parse_key(&loaded_subject_key, ci.subject_key, ci.subject_key_len,
+                                   NULL, 0);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  mbedtls_pk_parse_keyfile "
+                           "returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+
+    IMSG("  . Loading the issuer key ...");
+
+	ret = mbedtls_pk_parse_key(&loaded_issuer_key, ci.issuer_key, ci.issuer_key_len, NULL, 0);
+    if (ret != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_pk_parse_keyfile "
+                       "returned -x%02x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    IMSG(" ok\n");
+
+    if (ci.selfsign)
+    {
+        ci.subject_name = ci.issuer_name;
+        subject_key = issuer_key;
+    }
+
+    mbedtls_x509write_crt_set_subject_key(&crt, subject_key);
+    mbedtls_x509write_crt_set_issuer_key(&crt, issuer_key);
+
+    /*
+     * 1.0. Check the names for validity
+     */
+    if ((ret = mbedtls_x509write_crt_set_subject_name(&crt, ci.subject_name)) != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_x509write_crt_set_subject_name "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    if ((ret = mbedtls_x509write_crt_set_issuer_name(&crt, ci.issuer_name)) != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_x509write_crt_set_issuer_name "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    IMSG("  . Setting certificate values ...");
+
+    mbedtls_x509write_crt_set_version(&crt, ci.version);
+    mbedtls_x509write_crt_set_md_alg(&crt, ci.md);
+
+    ret = mbedtls_x509write_crt_set_serial(&crt, &serial);
+    if (ret != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_x509write_crt_set_serial "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    ret = mbedtls_x509write_crt_set_validity(&crt, ci.not_before, ci.not_after);
+    if (ret != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_x509write_crt_set_validity "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+
+    IMSG(" ok\n");
+
+    if (ci.version == MBEDTLS_X509_CRT_VERSION_3 &&
+        ci.basic_constraints != 0)
+    {
+        IMSG("  . Adding the Basic Constraints extension ...");
+
+        ret = mbedtls_x509write_crt_set_basic_constraints(&crt, ci.is_ca,
+                                                          ci.max_pathlen);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  x509write_crt_set_basic_constraints "
+                           "returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+
+#if defined(MBEDTLS_SHA1_C)
+    if (ci.version == MBEDTLS_X509_CRT_VERSION_3 &&
+        ci.subject_identifier != 0)
+    {
+        IMSG("  . Adding the Subject Key Identifier ...");
+
+        ret = mbedtls_x509write_crt_set_subject_key_identifier(&crt);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  mbedtls_x509write_crt_set_subject"
+                           "_key_identifier returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+
+    if (ci.version == MBEDTLS_X509_CRT_VERSION_3 &&
+        ci.authority_identifier != 0)
+    {
+        IMSG("  . Adding the Authority Key Identifier ...");
+
+        ret = mbedtls_x509write_crt_set_authority_key_identifier(&crt);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  mbedtls_x509write_crt_set_authority_"
+                           "key_identifier returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+#endif /* MBEDTLS_SHA1_C */
+
+    if (ci.version == MBEDTLS_X509_CRT_VERSION_3 &&
+        ci.key_usage != 0)
+    {
+        IMSG("  . Adding the Key Usage extension ...");
+
+        ret = mbedtls_x509write_crt_set_key_usage(&crt, ci.key_usage);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  mbedtls_x509write_crt_set_key_usage "
+                           "returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+
+    if (ci.version == MBEDTLS_X509_CRT_VERSION_3 &&
+        ci.ns_cert_type != 0)
+    {
+        IMSG("  . Adding the NS Cert Type extension ...");
+
+        ret = mbedtls_x509write_crt_set_ns_cert_type(&crt, ci.ns_cert_type);
+        if (ret != 0)
+        {
+            mbedtls_strerror(ret, buf, 1024);
+            IMSG(" failed\n  !  mbedtls_x509write_crt_set_ns_cert_type "
+                           "returned -0x%04x - %s\n\n",
+                           (unsigned int)-ret, buf);
+            goto exit;
+        }
+
+        IMSG(" ok\n");
+    }
+
+    if (ci.certificate_policy_val)
+    {
+        IMSG("  . Add certificate policy extension...");
+
+        mbedtls_x509write_crt_set_extension(&crt, MBEDTLS_OID_CERTIFICATE_POLICIES, MBEDTLS_OID_SIZE(MBEDTLS_OID_CERTIFICATE_POLICIES), 0, ci.certificate_policy_val, CERTIFICATE_POLICY_VAL_LEN);
+        IMSG(" ok\n");
+    }
+
+    if (ci.tci)
+    {
+        IMSG("  . Add DICE attestation extension...");
+
+        // Set preface
+        memcpy(attestation_extension_value, attestation_extension_value_preface, sizeof(attestation_extension_value_preface));
+        // Set TCI
+        memcpy(&attestation_extension_value[sizeof(attestation_extension_value_preface)], ci.tci, TCI_LEN);
+
+        mbedtls_x509write_crt_set_extension(&crt, dice_attestation_oid, sizeof(dice_attestation_oid), 0, attestation_extension_value, sizeof(attestation_extension_value));
+        IMSG(" ok\n");
+    }
+
+    IMSG("  . Create and append certificate...");
+    memset(output_buf, 0, MAX_CERT_SIZE);
+	ret = mbedtls_x509_crt_parse_der(crt_ctx, output_buf, sizeof(output_buf));
+	if (ret != 0)
+    {
+        mbedtls_strerror(ret, buf, 1024);
+        IMSG(" failed\n  !  mbedtls_x509_crt_parse_der -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        goto exit;
+    }
+    IMSG(" ok\n");
+
+    exit_code = MBEDTLS_EXIT_SUCCESS;
+
+exit:
+    mbedtls_x509write_crt_free(&crt);
+    mbedtls_pk_free(&loaded_subject_key);
+    mbedtls_pk_free(&loaded_issuer_key);
+    mbedtls_mpi_free(&serial);
+
+    return exit_code;
 }
 
 /*
@@ -609,6 +884,63 @@ static TEE_Result cmd_get_ta_shdr_digest(uint32_t param_types,
 	return sign_buffer(out, out_sz, nonce, nonce_sz);
 }
 
+static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
+				     TEE_Param params[TEE_NUM_PARAMS])
+{
+	(void)param_types;
+	(void)params;
+
+    cert_info cert_info_ekcert;
+	mbedtls_x509_crt crt_ctx;
+	int exit_code;
+
+	// CN=BL1,O=OP-TEE OS,C=GER
+    char name_bl32[32];
+    const char name_ekcert[] = "CN=EKCert,O=TPM EK,C=GER";
+
+	memset(&cert_info_ekcert, 0, sizeof(cert_info_ekcert));
+
+    mbedtls_x509_crt_init(&crt_ctx);
+    mbedtls_x509_crt_parse(&crt_ctx, crt_bl1, sizeof(crt_bl1));
+    mbedtls_x509_crt_parse(&crt_ctx, crt_bl2, sizeof(crt_bl2));
+    mbedtls_x509_crt_parse(&crt_ctx, crt_bl31, sizeof(crt_bl31));
+    mbedtls_x509_crt_parse(&crt_ctx, crt_bl32, sizeof(crt_bl32));
+
+    mbedtls_x509_dn_gets(name_bl32, sizeof(name_bl32), &crt_ctx.next->next->next->issuer);
+
+	// TODO: replace subject key with actual key of fTPM
+    cert_info_ekcert.subject_key = key_bl32;
+    cert_info_ekcert.subject_key_len = sizeof(key_bl32);
+    cert_info_ekcert.issuer_key = key_bl32;
+    cert_info_ekcert.issuer_key_len = sizeof(key_bl32);
+    cert_info_ekcert.subject_name = name_ekcert;
+    cert_info_ekcert.issuer_name = name_bl32;
+    cert_info_ekcert.not_before = DFL_NOT_BEFORE;
+    cert_info_ekcert.not_after = DFL_NOT_AFTER;
+    cert_info_ekcert.serial = DFL_SERIAL;
+    cert_info_ekcert.selfsign = 0;
+    cert_info_ekcert.is_ca = 0;
+    cert_info_ekcert.max_pathlen = DFL_MAX_PATHLEN;
+    cert_info_ekcert.key_usage = MBEDTLS_X509_KU_KEY_CERT_SIGN;
+    cert_info_ekcert.ns_cert_type = DFL_NS_CERT_TYPE;
+    cert_info_ekcert.version = DFL_VERSION - 1;
+    cert_info_ekcert.md = DFL_DIGEST;
+    cert_info_ekcert.subject_identifier = DFL_SUBJ_IDENT;
+    cert_info_ekcert.authority_identifier = DFL_AUTH_IDENT;
+    cert_info_ekcert.basic_constraints = DFL_CONSTRAINTS;
+    cert_info_ekcert.certificate_policy_val = certificate_policy_val_LDevID;
+    cert_info_ekcert.tci = tci_bl1;
+
+    exit_code = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
+
+	if (exit_code == 0)
+	{
+		// TODO: Add cert to chain
+	}
+
+	return exit_code;
+}
+
 static TEE_Result cmd_hash_ta_memory(uint32_t param_types,
 				     TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -759,6 +1091,8 @@ static TEE_Result invoke_command(void *sess_ctx __unused, uint32_t cmd_id,
 		return cmd_hash_ta_memory(param_types, params);
 	case PTA_ATTESTATION_HASH_TEE_MEMORY:
 		return cmd_hash_tee_memory(param_types, params);
+	case PTA_ATTESTATION_GET_EKCERT_CHAIN:
+		return cmd_get_ekcert_chain(param_types, params);
 	default:
 		break;
 	}

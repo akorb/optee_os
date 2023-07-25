@@ -19,6 +19,7 @@
 #define MBEDTLS_RSA_C
 #define MBEDTLS_PKCS1_V21
 #define MBEDTLS_MD_C
+#define MBEDTLS_ERROR_C
 
 #ifdef ARM32
 #define MBEDTLS_HAVE_INT32
