@@ -884,15 +884,39 @@ static TEE_Result cmd_get_ta_shdr_digest(uint32_t param_types,
 	return sign_buffer(out, out_sz, nonce, nonce_sz);
 }
 
+static TEE_Result load_ftpm_tci(uint8_t *tci, size_t tci_size) {
+	struct user_mode_ctx *uctx;
+	TEE_Result res;
+	struct ts_session *s;
+
+	assert(tci_size == TEE_SHA256_HASH_SIZE);
+
+	s = ts_get_calling_session();
+	if (!s)
+		return TEE_ERROR_ACCESS_DENIED;
+	uctx = to_user_mode_ctx(s->ctx);
+	if (!uctx)
+		return TEE_ERROR_ACCESS_DENIED;
+
+	s = ts_pop_current_session();
+	res = hash_regions(&uctx->vm_info, tci);
+	ts_push_current_session(s);
+	if (res)
+		return res;
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 				     TEE_Param params[TEE_NUM_PARAMS])
 {
 	(void)param_types;
 	(void)params;
 
+	uint8_t ftpm_tci[TEE_SHA256_HASH_SIZE];
     cert_info cert_info_ekcert;
 	mbedtls_x509_crt crt_ctx;
-	int exit_code;
+	int res;
 
 	// CN=BL1,O=OP-TEE OS,C=GER
     char name_bl32[32];
@@ -908,7 +932,14 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 
     mbedtls_x509_dn_gets(name_bl32, sizeof(name_bl32), &crt_ctx.next->next->next->issuer);
 
-	// TODO: replace subject key with actual key of fTPM
+	res = load_ftpm_tci(ftpm_tci, sizeof(ftpm_tci));
+	if (res != TEE_SUCCESS) {
+		IMSG("load_ftpm_tci returned %d", res);
+	}
+
+	// TODO: replace subject key with EK
+	// This MUST be based on the EPS.
+	// We probably have to pass this from the fTPM TA.
     cert_info_ekcert.subject_key = key_bl32;
     cert_info_ekcert.subject_key_len = sizeof(key_bl32);
     cert_info_ekcert.issuer_key = key_bl32;
@@ -929,15 +960,15 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
     cert_info_ekcert.authority_identifier = DFL_AUTH_IDENT;
     cert_info_ekcert.basic_constraints = DFL_CONSTRAINTS;
     cert_info_ekcert.certificate_policy_val = certificate_policy_val_LDevID;
-    cert_info_ekcert.tci = tci_bl1;
+    cert_info_ekcert.tci = ftpm_tci;
 
-    exit_code = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
+    res = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
 
-	if (exit_code == 0) {
+	if (res == 0) {
 		return TEE_SUCCESS;
 	}
 	else {
-		IMSG("create_and_add_certificate returned %d", exit_code);
+		IMSG("create_and_add_certificate returned %d", res);
 		return TEE_ERROR_GENERIC;
 	}
 }
