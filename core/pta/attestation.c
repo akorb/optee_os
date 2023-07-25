@@ -933,12 +933,13 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 
     exit_code = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
 
-	if (exit_code == 0)
-	{
-		// TODO: Add cert to chain
+	if (exit_code == 0) {
+		return TEE_SUCCESS;
 	}
-
-	return exit_code;
+	else {
+		IMSG("create_and_add_certificate returned %d", exit_code);
+		return TEE_ERROR_GENERIC;
+	}
 }
 
 static TEE_Result cmd_hash_ta_memory(uint32_t param_types,
