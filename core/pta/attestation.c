@@ -907,11 +907,50 @@ static TEE_Result load_ftpm_tci(uint8_t *tci, size_t tci_size) {
 	return TEE_SUCCESS;
 }
 
+
+static void get_der_size_of_chain(mbedtls_x509_crt* chain, uint16_t *out_der_size, uint16_t *out_len) {
+	mbedtls_x509_crt *cur_crt = chain;
+	*out_len = 0;
+	*out_der_size = 0;
+
+	while (cur_crt != NULL) {
+		*out_der_size += cur_crt->raw.len;
+		*out_len += 1;
+
+		cur_crt = cur_crt->next;
+	}
+}
+
+static void copy_cert_chain_to_buffer(mbedtls_x509_crt *chain, uint8_t *buffer, uint16_t *offsets) {
+	mbedtls_x509_crt *cur_crt = chain;
+	uint8_t *cur_buf = buffer;
+	uint16_t *cur_off = offsets;
+	while (cur_crt != NULL) {
+		// Set data
+		*cur_off = cur_crt->raw.len;
+		memcpy(cur_buf, cur_crt->raw.p, cur_crt->raw.len);
+
+		// Get addresses to next items
+		cur_buf = &cur_buf[*cur_off];
+		cur_off++;
+		cur_crt = cur_crt->next;
+	}
+}
+
 static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 				     TEE_Param params[TEE_NUM_PARAMS])
 {
-	(void)param_types;
-	(void)params;
+	uint8_t *certificates = params[0].memref.buffer;
+	uint16_t certificates_sz = params[0].memref.size;
+
+	uint16_t *offsets = params[1].memref.buffer;
+	uint16_t offsets_sz = params[1].memref.size;
+
+	if (param_types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					   TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					   TEE_PARAM_TYPE_NONE,
+					   TEE_PARAM_TYPE_NONE))
+		return TEE_ERROR_BAD_PARAMETERS;
 
 	uint8_t ftpm_tci[TEE_SHA256_HASH_SIZE];
     cert_info cert_info_ekcert;
@@ -963,14 +1002,22 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
     cert_info_ekcert.tci = ftpm_tci;
 
     res = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
-
-	if (res == 0) {
-		return TEE_SUCCESS;
-	}
-	else {
+	if (res != 0) {
 		IMSG("create_and_add_certificate returned %d", res);
 		return TEE_ERROR_GENERIC;
 	}
+
+	uint16_t out_len, out_der_size;
+	get_der_size_of_chain(&crt_ctx, &out_der_size, &out_len);
+	IMSG("Required buffer size for cert chain: %d. Given: %d", out_der_size, certificates_sz);
+	IMSG("Required buffer size for offsets: %lu, Given: %d", out_len * sizeof(uint16_t), offsets_sz);
+	if (out_der_size > certificates_sz || out_len * sizeof(uint16_t) > offsets_sz) {
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	copy_cert_chain_to_buffer(&crt_ctx, certificates, offsets);
+
+	return TEE_SUCCESS;
 }
 
 static TEE_Result cmd_hash_ta_memory(uint32_t param_types,
