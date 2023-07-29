@@ -924,8 +924,11 @@ static void get_der_size_of_chain(mbedtls_x509_crt* chain, uint16_t *out_der_siz
 static void copy_cert_chain_to_buffer(mbedtls_x509_crt *chain, uint8_t *buffer, uint16_t *offsets) {
 	mbedtls_x509_crt *cur_crt = chain;
 	uint8_t *cur_buf = buffer;
-	uint16_t *cur_off = offsets;
+	uint16_t *cur_off = offsets + 1;
+	uint16_t chain_len = 0;
 	while (cur_crt != NULL) {
+		chain_len++;
+
 		// Set data
 		*cur_off = cur_crt->raw.len;
 		memcpy(cur_buf, cur_crt->raw.p, cur_crt->raw.len);
@@ -935,6 +938,8 @@ static void copy_cert_chain_to_buffer(mbedtls_x509_crt *chain, uint8_t *buffer, 
 		cur_off++;
 		cur_crt = cur_crt->next;
 	}
+
+	*offsets = chain_len;
 }
 
 static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
@@ -1010,8 +1015,9 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 	uint16_t out_len, out_der_size;
 	get_der_size_of_chain(&crt_ctx, &out_der_size, &out_len);
 	IMSG("Required buffer size for cert chain: %d. Given: %d", out_der_size, certificates_sz);
-	IMSG("Required buffer size for offsets: %lu, Given: %d", out_len * sizeof(uint16_t), offsets_sz);
-	if (out_der_size > certificates_sz || out_len * sizeof(uint16_t) > offsets_sz) {
+	// The +1 is required because we also write the chain length as the first "offset"
+	IMSG("Required buffer size for offsets: %lu, Given: %d", (out_len + 1) * sizeof(uint16_t), offsets_sz);
+	if (out_der_size > certificates_sz || (out_len + 1) * sizeof(uint16_t) > offsets_sz) {
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
