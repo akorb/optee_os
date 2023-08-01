@@ -1054,6 +1054,8 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 
 	copy_cert_chain_to_buffer(&crt_ctx, certificates, offsets);
 
+	mbedtls_x509_crt_free(&crt_ctx);
+
 	return TEE_SUCCESS;
 }
 
