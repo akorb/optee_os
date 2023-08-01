@@ -82,11 +82,12 @@ static TEE_Result generate_key(void)
 static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
 {
     int ret = 1;
+	int der_len = 0;
     int exit_code = MBEDTLS_EXIT_FAILURE;
     mbedtls_pk_context loaded_issuer_key, loaded_subject_key;
     mbedtls_pk_context *issuer_key = &loaded_issuer_key,
                        *subject_key = &loaded_subject_key;
-    char buf[1024];
+    char buf[256];
     mbedtls_x509write_cert crt;
     mbedtls_mpi serial;
 	uint8_t output_buf[MAX_CERT_SIZE];
@@ -100,7 +101,6 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     mbedtls_pk_init(&loaded_issuer_key);
     mbedtls_pk_init(&loaded_subject_key);
     mbedtls_mpi_init(&serial);
-    memset(buf, 0, 1024);
 
     IMSG("");
 
@@ -110,7 +110,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
 
     if ((ret = mbedtls_mpi_read_string(&serial, 10, ci.serial)) != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_mpi_read_string "
                        "returned -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -130,7 +130,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
                                    NULL, 0);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  mbedtls_pk_parse_keyfile "
                            "returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -145,7 +145,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
 	ret = mbedtls_pk_parse_key(&loaded_issuer_key, ci.issuer_key, ci.issuer_key_len, NULL, 0);
     if (ret != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_pk_parse_keyfile "
                        "returned -x%02x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -168,7 +168,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
      */
     if ((ret = mbedtls_x509write_crt_set_subject_name(&crt, ci.subject_name)) != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_x509write_crt_set_subject_name "
                        "returned -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -177,7 +177,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
 
     if ((ret = mbedtls_x509write_crt_set_issuer_name(&crt, ci.issuer_name)) != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_x509write_crt_set_issuer_name "
                        "returned -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -192,7 +192,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     ret = mbedtls_x509write_crt_set_serial(&crt, &serial);
     if (ret != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_x509write_crt_set_serial "
                        "returned -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -202,7 +202,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     ret = mbedtls_x509write_crt_set_validity(&crt, ci.not_before, ci.not_after);
     if (ret != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_x509write_crt_set_validity "
                        "returned -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
@@ -220,7 +220,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
                                                           ci.max_pathlen);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  x509write_crt_set_basic_constraints "
                            "returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -239,7 +239,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
         ret = mbedtls_x509write_crt_set_subject_key_identifier(&crt);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  mbedtls_x509write_crt_set_subject"
                            "_key_identifier returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -257,7 +257,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
         ret = mbedtls_x509write_crt_set_authority_key_identifier(&crt);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  mbedtls_x509write_crt_set_authority_"
                            "key_identifier returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -276,7 +276,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
         ret = mbedtls_x509write_crt_set_key_usage(&crt, ci.key_usage);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  mbedtls_x509write_crt_set_key_usage "
                            "returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -294,7 +294,7 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
         ret = mbedtls_x509write_crt_set_ns_cert_type(&crt, ci.ns_cert_type);
         if (ret != 0)
         {
-            mbedtls_strerror(ret, buf, 1024);
+            mbedtls_strerror(ret, buf, 256);
             IMSG(" failed\n  !  mbedtls_x509write_crt_set_ns_cert_type "
                            "returned -0x%04x - %s\n\n",
                            (unsigned int)-ret, buf);
@@ -326,11 +326,20 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     }
 
     IMSG("  . Create and append certificate...");
-    memset(output_buf, 0, MAX_CERT_SIZE);
-	ret = mbedtls_x509_crt_parse_der(crt_ctx, output_buf, sizeof(output_buf));
+
+	der_len = mbedtls_x509write_crt_der(&crt, output_buf, MAX_CERT_SIZE, NULL, NULL);
+	if (der_len < 0)
+    {
+        mbedtls_strerror(der_len, buf, 256);
+        IMSG(" failed\n  !  mbedtls_x509write_crt_der -0x%04x - %s\n\n",
+                       (unsigned int)-der_len, buf);
+        goto exit;
+    }
+
+	ret = mbedtls_x509_crt_parse_der(crt_ctx, output_buf + sizeof(output_buf) - der_len, der_len);
 	if (ret != 0)
     {
-        mbedtls_strerror(ret, buf, 1024);
+        mbedtls_strerror(ret, buf, 256);
         IMSG(" failed\n  !  mbedtls_x509_crt_parse_der -0x%04x - %s\n\n",
                        (unsigned int)-ret, buf);
         goto exit;
@@ -956,25 +965,47 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 					   TEE_PARAM_TYPE_NONE,
 					   TEE_PARAM_TYPE_NONE))
 		return TEE_ERROR_BAD_PARAMETERS;
-
+	
 	uint8_t ftpm_tci[TEE_SHA256_HASH_SIZE];
     cert_info cert_info_ekcert;
 	mbedtls_x509_crt crt_ctx;
 	int res;
 
 	// CN=BL1,O=OP-TEE OS,C=GER
-    char name_bl32[32];
+    char name_bl32[50];
+	char buf[256];
     const char name_ekcert[] = "CN=EKCert,O=TPM EK,C=GER";
 
 	memset(&cert_info_ekcert, 0, sizeof(cert_info_ekcert));
 
     mbedtls_x509_crt_init(&crt_ctx);
-    mbedtls_x509_crt_parse(&crt_ctx, crt_bl1, sizeof(crt_bl1));
-    mbedtls_x509_crt_parse(&crt_ctx, crt_bl2, sizeof(crt_bl2));
-    mbedtls_x509_crt_parse(&crt_ctx, crt_bl31, sizeof(crt_bl31));
-    mbedtls_x509_crt_parse(&crt_ctx, crt_bl32, sizeof(crt_bl32));
+    res = mbedtls_x509_crt_parse(&crt_ctx, crt_bl1, sizeof(crt_bl1));
+	if (res != 0) {
+		mbedtls_strerror(res, buf, 256);
+		EMSG(" parsing crt_bl1 failed\n  !  mbedtls_x509_crt_parse returned -0x%x - %s\n\n",
+                       (unsigned int) -res, buf);
+	}
+    res = mbedtls_x509_crt_parse(&crt_ctx, crt_bl2, sizeof(crt_bl2));
+	if (res != 0) {
+		mbedtls_strerror(res, buf, 256);
+		EMSG(" parsing crt_bl2 failed\n  !  mbedtls_x509_crt_parse returned -0x%x - %s\n\n",
+                       (unsigned int) -res, buf);
+	}
+    res = mbedtls_x509_crt_parse(&crt_ctx, crt_bl31, sizeof(crt_bl31));
+	if (res != 0) {
+		mbedtls_strerror(res, buf, 256);
+		EMSG(" parsing crt_bl31 failed\n  !  mbedtls_x509_crt_parse returned -0x%x - %s\n\n",
+                       (unsigned int) -res, buf);
+	}
+    res = mbedtls_x509_crt_parse(&crt_ctx, crt_bl32, sizeof(crt_bl32));
+	if (res != 0) {
+		mbedtls_strerror(res, buf, 256);
+		EMSG(" parsing crt_bl32 failed\n  !  mbedtls_x509_crt_parse returned -0x%x - %s\n\n",
+                       (unsigned int) -res, buf);
+	}
 
     mbedtls_x509_dn_gets(name_bl32, sizeof(name_bl32), &crt_ctx.next->next->next->issuer);
+	DMSG("Name of BL32: %s", name_bl32);
 
 	res = load_ftpm_tci(ftpm_tci, sizeof(ftpm_tci));
 	if (res != TEE_SUCCESS) {
