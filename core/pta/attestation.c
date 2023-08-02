@@ -20,7 +20,6 @@
 #include <utee_defines.h>
 
 #include <mbedtls/x509_crt.h>
-#include <mbedtls/x509_csr.h>
 #include <mbedtls/oid.h>
 #include <mbedtls/md.h>
 #include <mbedtls/error.h>
