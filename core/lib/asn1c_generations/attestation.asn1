@@ -1,0 +1,28 @@
+AliasCertExtension DEFINITIONS ::= BEGIN
+
+DiceTcbInfo ::= SEQUENCE {
+    vendor [0] IMPLICIT UTF8String OPTIONAL,
+    model [1] IMPLICIT UTF8String OPTIONAL,
+    version [2] IMPLICIT UTF8String OPTIONAL,
+    svn [3] IMPLICIT INTEGER OPTIONAL,
+    layer [4] IMPLICIT INTEGER OPTIONAL,
+    index [5] IMPLICIT INTEGER OPTIONAL,
+    fwids [6] IMPLICIT FWIDLIST OPTIONAL,
+    flags [7] IMPLICIT OperationalFlags OPTIONAL,
+    vendorInfo [8] IMPLICIT OCTET STRING OPTIONAL,
+    type [9] IMPLICIT OCTET STRING OPTIONAL
+}
+
+FWIDLIST ::= SEQUENCE SIZE (1..MAX) OF FWID
+FWID ::= SEQUENCE {
+    hashAlg OBJECT IDENTIFIER,
+    digest OCTET STRING
+}
+OperationalFlags ::= BIT STRING {
+    notConfigured (0),
+    notSecure (1),
+    recovery (2),
+    debug (3)
+}
+
+END

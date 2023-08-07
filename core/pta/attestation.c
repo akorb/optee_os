@@ -24,11 +24,15 @@
 #include <mbedtls/md.h>
 #include <mbedtls/error.h>
 
+#include <DiceTcbInfo.h>
+
 #define PTA_NAME "attestation.pta"
 
 #define MAX_KEY_SIZE 4096
 
 static TEE_UUID pta_uuid = PTA_ATTESTATION_UUID;
+
+const asn_oid_arc_t sha256_oid[] = {2, 16, 840, 1, 101, 3, 4, 2, 1};
 
 static struct rsa_keypair *key;
 
@@ -78,6 +82,30 @@ static TEE_Result generate_key(void)
 	return res;
 }
 
+static int generate_attestation_extension_data(uint8_t *output_buf, const size_t outbut_buf_len,
+                                               const asn_oid_arc_t *hash_type_oid, const size_t hash_type_oid_len,
+                                               const uint8_t *hash, const size_t hash_len)
+{
+    int ret;
+    DiceTcbInfo_t *tcbInfo = calloc(1, sizeof(*tcbInfo));
+    assert(tcbInfo);
+
+    FWID_t *fwid = calloc(1, sizeof(*fwid));
+    OBJECT_IDENTIFIER_set_arcs(&fwid->hashAlg, hash_type_oid, hash_type_oid_len / sizeof(hash_type_oid[0]));
+    fwid->digest.buf = malloc(hash_len);
+    memcpy(fwid->digest.buf, hash, hash_len);
+    fwid->digest.size = hash_len;
+
+    tcbInfo->fwids = calloc(1, sizeof(*tcbInfo->fwids));
+    ret = ASN_SEQUENCE_ADD(&tcbInfo->fwids->list, fwid);
+    assert(ret == 0);
+
+    asn_enc_rval_t ec = der_encode_to_buffer(&asn_DEF_DiceTcbInfo, tcbInfo, output_buf, outbut_buf_len);
+    ASN_STRUCT_FREE(asn_DEF_DiceTcbInfo, tcbInfo);
+
+    return ec.encoded;
+}
+
 static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
 {
     int ret = 1;
@@ -90,8 +118,6 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     mbedtls_x509write_cert crt;
     mbedtls_mpi serial;
 	uint8_t output_buf[MAX_CERT_SIZE];
-
-	uint8_t attestation_extension_value[sizeof(attestation_extension_value_preface) + TCI_LEN];
 
     /*
      * Set to sane values
@@ -315,13 +341,18 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     {
         IMSG("  . Add DICE attestation extension...");
 
-        // Set preface
-        memcpy(attestation_extension_value, attestation_extension_value_preface, sizeof(attestation_extension_value_preface));
-        // Set TCI
-        memcpy(&attestation_extension_value[sizeof(attestation_extension_value_preface)], ci.tci, TCI_LEN);
+        uint8_t out_buf[128];
 
-        mbedtls_x509write_crt_set_extension(&crt, dice_attestation_oid, sizeof(dice_attestation_oid), 0, attestation_extension_value, sizeof(attestation_extension_value));
-        IMSG(" ok\n");
+        int data_size = generate_attestation_extension_data(out_buf, sizeof(out_buf), sha256_oid, sizeof(sha256_oid), ci.tci, TCI_LEN);
+        if (data_size <= 0)
+        {
+            IMSG("Failed to create DICE attestation extension. Return value: %d", data_size);
+        }
+        else
+        {
+            mbedtls_x509write_crt_set_extension(&crt, dice_attestation_oid, sizeof(dice_attestation_oid), 0, out_buf, data_size);
+            IMSG(" ok");
+        }
     }
 
     IMSG("  . Create and append certificate...");

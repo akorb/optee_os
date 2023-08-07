@@ -162,6 +162,12 @@ libdir = core/lib/scmi-server
 include mk/lib.mk
 endif
 
+ifeq ($(CFG_ATTESTATION_PTA),y)
+libname = asn1c_generations
+libdir = core/lib/asn1c_generations
+include mk/lib.mk
+endif
+
 #
 # Do main source
 #

@@ -51,4 +51,13 @@
 #define PRIX64		__PRI64_PREFIX "X"
 #define PRIXPTR		__PRIPTR_PREFIX "X"
 
+/* Macros for printing `intmax_t' and `uintmax_t'.  */
+#define PRIdMAX        __PRI64_PREFIX "d"
+#define PRIiMAX        __PRI64_PREFIX "i"
+#define PRIoMAX        __PRI64_PREFIX "o"
+#define PRIuMAX        __PRI64_PREFIX "u"
+#define PRIxMAX        __PRI64_PREFIX "x"
+#define PRIXMAX        __PRI64_PREFIX "X"
+
+
 #endif /*__INTTYPES_H*/
