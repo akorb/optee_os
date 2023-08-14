@@ -123,8 +123,8 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
      * Set to sane values
      */
     mbedtls_x509write_crt_init(&crt);
-    mbedtls_pk_init(&loaded_issuer_key);
-    mbedtls_pk_init(&loaded_subject_key);
+    mbedtls_pk_init(issuer_key);
+    mbedtls_pk_init(subject_key);
     mbedtls_mpi_init(&serial);
 
     IMSG("");
@@ -151,16 +151,31 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
     {
         IMSG("  . Loading the subject key ...");
 
-        ret = mbedtls_pk_parse_key(&loaded_subject_key, ci.subject_key, ci.subject_key_len,
-                                   NULL, 0);
-        if (ret != 0)
-        {
-            mbedtls_strerror(ret, buf, 256);
-            IMSG(" failed\n  !  mbedtls_pk_parse_keyfile "
-                           "returned -0x%04x - %s\n\n",
-                           (unsigned int)-ret, buf);
-            goto exit;
-        }
+		mbedtls_rsa_context rsaCtx;
+		mbedtls_rsa_init(&rsaCtx, MBEDTLS_RSA_PKCS_V15, 0);
+
+		// The default exponent, i.e., 65537
+		const unsigned char exponent[] = { 0x01, 0x00, 0x01 };
+		if ((ret = mbedtls_rsa_import_raw(&rsaCtx, ci.subject_key, ci.subject_key_len, NULL, 0, NULL, 0, NULL, 0, exponent, sizeof(exponent))) != 0)
+		{
+			mbedtls_strerror(ret, buf, 256);
+        	IMSG(" failed\n  !  mbedtls_rsa_import_raw "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        	goto exit;
+		}
+
+		if ((ret = mbedtls_rsa_complete(&rsaCtx)) != 0)
+		{
+			mbedtls_strerror(ret, buf, 256);
+        	IMSG(" failed\n  !  mbedtls_rsa_complete "
+                       "returned -0x%04x - %s\n\n",
+                       (unsigned int)-ret, buf);
+        	goto exit;
+		}
+
+		mbedtls_pk_setup(subject_key, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+		memcpy(mbedtls_pk_rsa(*subject_key), &rsaCtx, sizeof(rsaCtx));;
 
         IMSG(" ok\n");
     }
@@ -990,12 +1005,15 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 	uint16_t *sizes = params[1].memref.buffer;
 	uint16_t sizes_sz = params[1].memref.size;
 
+	uint8_t *ekPub = params[2].memref.buffer;
+	size_t ekPubLen = params[2].memref.size;
+
 	if (param_types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
 					   TEE_PARAM_TYPE_MEMREF_OUTPUT,
-					   TEE_PARAM_TYPE_NONE,
+					   TEE_PARAM_TYPE_MEMREF_INPUT,
 					   TEE_PARAM_TYPE_NONE))
 		return TEE_ERROR_BAD_PARAMETERS;
-	
+
 	uint8_t ftpm_tci[TEE_SHA256_HASH_SIZE];
     cert_info cert_info_ekcert;
 	mbedtls_x509_crt crt_ctx;
@@ -1045,8 +1063,8 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 	// TODO: replace subject key with EK
 	// This MUST be based on the EPS.
 	// We probably have to pass this from the fTPM TA.
-    cert_info_ekcert.subject_key = key_bl32;
-    cert_info_ekcert.subject_key_len = sizeof(key_bl32);
+    cert_info_ekcert.subject_key = ekPub;
+    cert_info_ekcert.subject_key_len = ekPubLen;
     cert_info_ekcert.issuer_key = key_bl32;
     cert_info_ekcert.issuer_key_len = sizeof(key_bl32);
     cert_info_ekcert.subject_name = name_ekcert;
