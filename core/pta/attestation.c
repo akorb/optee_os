@@ -1060,9 +1060,6 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 		IMSG("load_ftpm_tci returned %d", res);
 	}
 
-	// TODO: replace subject key with EK
-	// This MUST be based on the EPS.
-	// We probably have to pass this from the fTPM TA.
     cert_info_ekcert.subject_key = ekPub;
     cert_info_ekcert.subject_key_len = ekPubLen;
     cert_info_ekcert.issuer_key = key_bl32;
