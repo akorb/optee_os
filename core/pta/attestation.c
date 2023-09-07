@@ -1072,7 +1072,7 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
     cert_info_ekcert.selfsign = 0;
     cert_info_ekcert.is_ca = 0;
     cert_info_ekcert.max_pathlen = DFL_MAX_PATHLEN;
-    cert_info_ekcert.key_usage = MBEDTLS_X509_KU_KEY_CERT_SIGN;
+    cert_info_ekcert.key_usage = MBEDTLS_X509_KU_DIGITAL_SIGNATURE;
     cert_info_ekcert.ns_cert_type = DFL_NS_CERT_TYPE;
     cert_info_ekcert.version = DFL_VERSION - 1;
     cert_info_ekcert.md = DFL_DIGEST;
