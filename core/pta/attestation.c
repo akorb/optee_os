@@ -25,6 +25,8 @@
 #include <mbedtls/error.h>
 
 #include <DiceTcbInfo.h>
+#include <boot_chain_keys.h>
+#include <cert_chain.h>
 
 #define PTA_NAME "attestation.pta"
 
