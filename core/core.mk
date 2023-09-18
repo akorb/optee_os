@@ -165,8 +165,9 @@ endif
 ifeq ($(CFG_ATTESTATION_PTA),y)
 out_path = $(realpath core/include)
 ignored := $(shell make -C ../certs_workspace INSTALL_PATH="$(out_path)" install-cert_chain.h install-boot_chain_final_key.h)
-libname = asn1c_generations
-libdir = core/lib/asn1c_generations
+
+libname = alias_cert_extension
+libdir = core/lib/alias_cert_extension
 include mk/lib.mk
 endif
 

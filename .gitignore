@@ -5,3 +5,5 @@ TAGS
 out
 .project
 *.swp
+core/include/boot_chain_final_key.h
+core/include/cert_chain.h

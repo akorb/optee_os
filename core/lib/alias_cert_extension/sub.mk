@@ -1,4 +1,4 @@
-include core/lib/asn1c_generations/Makefile.am.libasncodec
+include core/lib/alias_cert_extension/Makefile.am.libasncodec
 
 global-incdirs-y += .
 cflags$(sm) += $(ASN_MODULE_CFLAGS)
