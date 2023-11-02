@@ -136,7 +136,7 @@ typedef struct cert_info
     unsigned char key_usage;      /* key usage flags                                       */
     unsigned char ns_cert_type;   /* NS cert type                                          */
     const uint8_t *certificate_policy_val;
-    const uint8_t *tci; /* Trused Componentent Identifier aka Firmware ID (FWID)*/
+    const uint8_t *fwid; /* Trused Componentent Identifier aka Firmware ID (FWID)*/
 } cert_info;
 
 /*
@@ -148,7 +148,7 @@ Generated via https://kjur.github.io/jsrsasign/tool/tool_asn1encoder.html with:
             "seq": [
                 {
                     "oid": {
-                        "oid": "2.23.133.5.4.100.6"
+                        "oid": "2.23.133.5.4.100.9"
                     }
                 }
             ]
@@ -156,22 +156,13 @@ Generated via https://kjur.github.io/jsrsasign/tool/tool_asn1encoder.html with:
     ]
 }
 */
-static const uint8_t certificate_policy_val_IDevID[] = {0x30, 0x0b, 0x30, 0x09, 0x06, 0x07, 0x67, 0x81, 0x05, 0x05, 0x04, 0x64, 0x06};
-static const uint8_t certificate_policy_val_LDevID[] = {0x30, 0x0b, 0x30, 0x09, 0x06, 0x07, 0x67, 0x81, 0x05, 0x05, 0x04, 0x64, 0x07};
-
-static const uint8_t attestation_extension_value_preface[] = {
-    0x30, 0x31, 0xa6, 0x2f, 0x30, 0x2d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
-    0x65, 0x03, 0x04, 0x02, 0x01, 0x04, 0x20};
+static const uint8_t certificate_policy_attestation[] = {0x30, 0x0b, 0x30, 0x09, 0x06, 0x07, 0x67, 0x81, 0x05, 0x05, 0x04, 0x64, 0x09};
 
 // SHA256, 256 Bits = 32 Bytes
-#define TCI_LEN 32
-#define CERTIFICATE_POLICY_VAL_LEN sizeof(certificate_policy_val_IDevID)
+#define FWID_LEN (256 / 8)
+#define CERTIFICATE_POLICY_VAL_LEN sizeof(certificate_policy_attestation)
 
 static const char dice_attestation_oid[] = {0x67, 0x81, 0x05, 0x05, 0x04, 0x01};
-static const uint8_t tci_bl1[TCI_LEN] = {0x4c, 0xce, 0xfa, 0x68, 0x7d, 0x38, 0xbe, 0x8f,
-                                         0xe1, 0x85, 0xc0, 0xbf, 0x92, 0xb2, 0x8c, 0xdb,
-                                         0x69, 0xe8, 0x27, 0xe0, 0xe2, 0x39, 0x20, 0xbe,
-                                         0x2c, 0xcf, 0x4a, 0xb2, 0xba, 0x0d, 0xe9, 0x60};
 
 #define DFL_NOT_BEFORE "20230725000000"
 #define DFL_NOT_AFTER "99991231235959"

@@ -354,13 +354,13 @@ static int create_and_add_certificate(cert_info ci, mbedtls_x509_crt *crt_ctx)
         IMSG(" ok\n");
     }
 
-    if (ci.tci)
+    if (ci.fwid)
     {
         IMSG("  . Add DICE attestation extension...");
 
         uint8_t out_buf[128];
 
-        int data_size = generate_attestation_extension_data(out_buf, sizeof(out_buf), sha256_oid, sizeof(sha256_oid), ci.tci, TCI_LEN);
+        int data_size = generate_attestation_extension_data(out_buf, sizeof(out_buf), sha256_oid, sizeof(sha256_oid), ci.fwid, FWID_LEN);
         if (data_size <= 0)
         {
             IMSG("Failed to create DICE attestation extension. Return value: %d", data_size);
@@ -940,12 +940,12 @@ static TEE_Result cmd_get_ta_shdr_digest(uint32_t param_types,
 	return sign_buffer(out, out_sz, nonce, nonce_sz);
 }
 
-static TEE_Result load_ftpm_tci(uint8_t *tci, size_t tci_size) {
+static TEE_Result load_ftpm_fwid(uint8_t *fwid, size_t fwid_size) {
 	struct user_mode_ctx *uctx;
 	TEE_Result res;
 	struct ts_session *s;
 
-	assert(tci_size == TEE_SHA256_HASH_SIZE);
+	assert(fwid_size == TEE_SHA256_HASH_SIZE);
 
 	s = ts_get_calling_session();
 	if (!s)
@@ -955,7 +955,7 @@ static TEE_Result load_ftpm_tci(uint8_t *tci, size_t tci_size) {
 		return TEE_ERROR_ACCESS_DENIED;
 
 	s = ts_pop_current_session();
-	res = hash_regions(&uctx->vm_info, tci);
+	res = hash_regions(&uctx->vm_info, fwid);
 	ts_push_current_session(s);
 	if (res)
 		return res;
@@ -1016,7 +1016,7 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 					   TEE_PARAM_TYPE_NONE))
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	uint8_t ftpm_tci[TEE_SHA256_HASH_SIZE];
+	uint8_t ftpm_fwid[TEE_SHA256_HASH_SIZE];
     cert_info cert_info_ekcert;
 	mbedtls_x509_crt crt_ctx;
 	int res;
@@ -1057,9 +1057,9 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
     mbedtls_x509_dn_gets(name_bl32, sizeof(name_bl32), &crt_ctx.next->next->next->issuer);
 	DMSG("Name of BL32: %s", name_bl32);
 
-	res = load_ftpm_tci(ftpm_tci, sizeof(ftpm_tci));
+	res = load_ftpm_fwid(ftpm_fwid, sizeof(ftpm_fwid));
 	if (res != TEE_SUCCESS) {
-		IMSG("load_ftpm_tci returned %d", res);
+		IMSG("load_ftpm_fwid returned %d", res);
 	}
 
     cert_info_ekcert.subject_key = ekPub;
@@ -1081,8 +1081,8 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
     cert_info_ekcert.subject_identifier = DFL_SUBJ_IDENT;
     cert_info_ekcert.authority_identifier = DFL_AUTH_IDENT;
     cert_info_ekcert.basic_constraints = DFL_CONSTRAINTS;
-    cert_info_ekcert.certificate_policy_val = certificate_policy_val_LDevID;
-    cert_info_ekcert.tci = ftpm_tci;
+    cert_info_ekcert.certificate_policy_val = certificate_policy_attestation;
+    cert_info_ekcert.fwid = ftpm_fwid;
 
     res = create_and_add_certificate(cert_info_ekcert, &crt_ctx);
 	if (res != 0) {
