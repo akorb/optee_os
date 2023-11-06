@@ -135,6 +135,8 @@ typedef struct cert_info
     mbedtls_md_type_t md;         /* Hash used for signing                                 */
     unsigned char key_usage;      /* key usage flags                                       */
     unsigned char ns_cert_type;   /* NS cert type                                          */
+    const uint8_t *subject_alt_name;
+    size_t subject_alt_name_len;
     const uint8_t *certificate_policy_val;
     const uint8_t *fwid; /* Trused Componentent Identifier aka Firmware ID (FWID)*/
 } cert_info;
@@ -181,6 +183,17 @@ static const char dice_attestation_oid[] = {0x67, 0x81, 0x05, 0x05, 0x04, 0x01};
 #define DFL_SUBJ_IDENT 1
 #define DFL_CONSTRAINTS 1
 #define DFL_DIGEST MBEDTLS_MD_SHA256
+
+#define COUNT_OF_BYTES(array) sizeof((char[]){ array })
+
+// "id:44494345", where 44494345 is ASCII for "DICE"
+// Generated with command `echo -n "id:44494345" | xxd -i`
+#define SUB_ALT_TPM_MANUFACTURER 0x69, 0x64, 0x3a, 0x34, 0x34, 0x34, 0x39, 0x34, 0x33, 0x34, 0x35
+// "firmware"
+#define SUB_ALT_TPM_MODEL 0x46, 0x57
+// It is a TPM 2 model. But only major version specified. Minor version is written to be 0, but must be derived from TCI
+// "id:00020000"
+#define SUB_ALT_TPM_VERSION 0x69, 0x64, 0x3a, 0x30, 0x30, 0x30, 0x32, 0x30, 0x30, 0x30, 0x30
 
 #define MBEDTLS_EXIT_SUCCESS 0
 #define MBEDTLS_EXIT_FAILURE 1
