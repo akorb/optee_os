@@ -166,11 +166,7 @@ static const uint8_t certificate_policy_attestation[] = {0x30, 0x0b, 0x30, 0x09,
 
 static const char dice_attestation_oid[] = {0x67, 0x81, 0x05, 0x05, 0x04, 0x01};
 
-#ifdef CFG_DFL_NOT_BEFORE
-#define DFL_NOT_BEFORE CFG_DFL_NOT_BEFORE
-#else
 #define DFL_NOT_BEFORE "20230725000000"
-#endif
 #define DFL_NOT_AFTER "99991231235959"
 #define DFL_SERIAL "1"
 #define DFL_SELFSIGN 0
