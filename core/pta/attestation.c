@@ -1080,18 +1080,36 @@ static TEE_Result cmd_get_ekcert_chain(uint32_t param_types,
 	}
 
 	const uint8_t subjectAltName[] = {
-        0x30, 0x43, 0xa4, 0x41, 0x30, 0x3f, 0x31, 0x16, 0x30, 0x14, 0x06, 0x05,
-        0x67, 0x81, 0x05, 0x02, 0x01, 0x0c,
-        COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER),
-        SUB_ALT_TPM_MANUFACTURER,
-        0x31, 0x0d, 0x30, 0x0b, 0x06, 0x05,
-        0x67, 0x81, 0x05, 0x02, 0x02, 0x0c,
-        COUNT_OF_BYTES(SUB_ALT_TPM_MODEL),
-        SUB_ALT_TPM_MODEL,
-        0x31, 0x16,
-        0x30, 0x14, 0x06, 0x05, 0x67, 0x81, 0x05, 0x02, 0x03, 0x0c,
-        COUNT_OF_BYTES(SUB_ALT_TPM_VERSION),
-        SUB_ALT_TPM_VERSION};
+        // SEQUENCE
+        0x30, 3 + COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER) + COUNT_OF_BYTES(SUB_ALT_TPM_MODEL) + COUNT_OF_BYTES(SUB_ALT_TPM_VERSION) + 40,
+        //   [4]
+        0xa4, 3 + COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER) + COUNT_OF_BYTES(SUB_ALT_TPM_MODEL) + COUNT_OF_BYTES(SUB_ALT_TPM_VERSION) + 38,
+        //     SEQUENCE
+        0x30, 3 + COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER) + COUNT_OF_BYTES(SUB_ALT_TPM_MODEL) + COUNT_OF_BYTES(SUB_ALT_TPM_VERSION) + 36,
+        //       SET
+        0x31, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER) + 10,
+        //         SEQUENCE
+        0x30, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER) + 8,
+        //           OID
+        0x06, 0x05, 0x67, 0x81, 0x05, 0x02, 0x01,
+        //           UTF8String
+        0x0c, COUNT_OF_BYTES(SUB_ALT_TPM_MANUFACTURER), SUB_ALT_TPM_MANUFACTURER,
+        //       SET
+        0x31, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_MODEL) + 10,
+        //         SEQUENCE
+        0x30, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_MODEL) + 8,
+        //           OID
+        0x06, 0x05, 0x67, 0x81, 0x05, 0x02, 0x02,
+        //           UTF8String
+        0x0c, COUNT_OF_BYTES(SUB_ALT_TPM_MODEL), SUB_ALT_TPM_MODEL,
+        //       SET
+        0x31, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_VERSION) + 10,
+        //         SEQUENCE
+        0x30, 1 + COUNT_OF_BYTES(SUB_ALT_TPM_VERSION) + 8,
+        //           OID
+        0x06, 0x05, 0x67, 0x81, 0x05, 0x02, 0x03,
+        0x0c, COUNT_OF_BYTES(SUB_ALT_TPM_VERSION), SUB_ALT_TPM_VERSION
+    };
 
     cert_info_ekcert.subject_key = ekPub;
     cert_info_ekcert.subject_key_len = ekPubLen;
